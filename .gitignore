@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 报告渲染的中间产物（逐页 PNG 与 PDF，仅用于版面检查）
+_render/
+
+# 编辑器
+.idea/
+.vscode/
+
+# Word 临时文件
+~$*.docx
+
+# 旧版本 / 重复的打包文件（仓库里已有更好的对应物）
+demo.zip
+demo.png
+源码code.docx
+示例图.docx

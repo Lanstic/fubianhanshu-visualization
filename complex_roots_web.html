@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复数 n 次方根 · 交互小程序</title>
+<style>  :root{
+    color-scheme: light dark;
+    --font-size-base: 16px;
+    --background:#ffffff;      --foreground:#101828;
+    --card:#f7f8fa;            --muted-foreground:#5b6675;
+    --border:#d5dae2;          --primary:#d6336c;
+    --primary-foreground:#ffffff;
+    --destructive:#c02c3c;
+    --viz-series-1:#0f7b8a;    --viz-series-2:#a86200;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --background:#0e1116;    --foreground:#e6eaf2;
+      --card:#161b23;          --muted-foreground:#98a3b3;
+      --border:#2a3342;        --primary:#ff7aa8;
+      --primary-foreground:#12161d;
+      --destructive:#ff8ba7;
+      --viz-series-1:#56d6d6;  --viz-series-2:#ffb347;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--background);color:var(--foreground);
+    font:var(--font-size-base)/1.6 "Microsoft YaHei","PingFang SC",system-ui,"Segoe UI",sans-serif;
+  }
+  main{max-width:840px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:1.45rem;font-weight:500;margin:0 0 .3rem}
+  h2{font-size:1rem;font-weight:500;margin:2rem 0 .5rem;color:var(--muted-foreground)}
+  p{margin:.4rem 0}
+  .lead{color:var(--muted-foreground);margin-bottom:1.1rem}
+  code{font-family:Consolas,Menlo,monospace;font-size:.92em}
+  .formula{
+    font-family:Consolas,Menlo,monospace;background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:.55rem .8rem;display:inline-block;margin:.35rem 0
+  }
+  .viz-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .7rem;margin:.4rem 0 .2rem}
+  .form-label{color:var(--muted-foreground);font-size:.92em}
+  .form-control{
+    padding:.35rem .55rem;border:1px solid var(--border);border-radius:8px;
+    background:var(--card);color:inherit;font:inherit;font-size:.95em
+  }
+  .form-control:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+  .btn{
+    padding:.35rem .9rem;border:1px solid var(--border);border-radius:8px;background:var(--card);
+    color:inherit;font:inherit;font-size:.95em;cursor:pointer
+  }
+  .btn:hover{border-color:var(--primary)}
+  .btn[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+  .viz-row{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem}
+  .viz-row span{font-family:Consolas,Menlo,monospace;font-size:.86em;white-space:nowrap}
+  .text-small{font-size:.86em}
+  .text-muted{color:var(--muted-foreground)}
+  .text-destructive{color:var(--destructive)}
+  footer{margin-top:2.2rem;padding-top:1rem;border-top:1px solid var(--border);
+         color:var(--muted-foreground);font-size:.86em}</style>
+</head>
+<body>
+<main>
+  <h1>复数 n 次方根</h1>
+  <p class="lead">输入任意复数 z 和方根次数 n，立刻得到全部 n 个根和它们的分布图形。</p>
+  <p class="formula">w<sub>k</sub> = |z|<sup>1/n</sup> · e<sup>i(θ+2πk)/n</sup>,&nbsp; k = 0, 1, …, n−1</p>
+<div id="roots-widget-root">
+  <div class="viz-controls">
+    <label class="form-label" for="roots-input-z">复数 z</label>
+    <input id="roots-input-z" class="form-control" type="text" value="3+4i" spellcheck="false"
+           autocomplete="off" style="max-width:11rem" aria-describedby="roots-hint">
+    <label class="form-label" for="roots-input-n">方根次数 n</label>
+    <input id="roots-input-n" class="form-control" type="number" min="1" max="20" step="1" value="5"
+           style="max-width:5.5rem">
+    <button id="roots-btn-play" class="btn" type="button" aria-pressed="true">暂停</button>
+    <span id="roots-hint" class="text-small text-muted">可写 3+4i、-8、2i、sqrt(2)-sqrt(2)i、2*exp(i*pi/3)</span>
+  </div>
+
+  <p id="roots-status" class="text-small" style="margin:0.5rem 0 0.25rem"></p>
+
+  <svg id="roots-svg" viewBox="0 0 740 372" width="100%" role="img"
+       aria-labelledby="roots-svg-title roots-svg-desc"
+       style="display:block;height:auto;color:var(--foreground)">
+    <title id="roots-svg-title">复数 n 次方根</title>
+    <desc id="roots-svg-desc">复平面上 z 的 n 个 n 次方根，均匀分布在半径为 |z| 的 n 次方根的圆上</desc>
+    <g id="roots-layer-grid"></g>
+    <g id="roots-layer-static"></g>
+    <g id="roots-layer-live"></g>
+  </svg>
+
+  <div id="roots-list" class="viz-row" style="margin-top:0.35rem"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const NS = "http://www.w3.org/2000/svg";
+  const widget = document.getElementById("roots-widget-root");
+  if (!widget) return;
+
+  const svg = document.getElementById("roots-svg");
+  const layerGrid = document.getElementById("roots-layer-grid");
+  const layerStatic = document.getElementById("roots-layer-static");
+  const layerLive = document.getElementById("roots-layer-live");
+  const inputZ = document.getElementById("roots-input-z");
+  const inputN = document.getElementById("roots-input-n");
+  const btnPlay = document.getElementById("roots-btn-play");
+  const statusEl = document.getElementById("roots-status");
+  const svgDesc = document.getElementById("roots-svg-desc");
+  const listEl = document.getElementById("roots-list");
+
+  const PI = Math.PI, TAU = 2 * Math.PI;
+  const LOOP_SECONDS = 6;          // 右图指针转一圈（扫过全部 n 个根）的时长
+
+  /* ----------------------------------------------------------- 复数运算 -- */
+  const C = (re, im) => ({ re: re, im: im });
+  const ZERO = C(0, 0), ONE = C(1, 0), IM1 = C(0, 1);
+  const add = (a, b) => C(a.re + b.re, a.im + b.im);
+  const sub = (a, b) => C(a.re - b.re, a.im - b.im);
+  const mul = (a, b) => C(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re);
+  const div = (a, b) => {
+    const d = b.re * b.re + b.im * b.im;
+    return C((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d);
+  };
+  const neg = (a) => C(-a.re, -a.im);
+  const cabs = (a) => Math.hypot(a.re, a.im);
+  const carg = (a) => Math.atan2(a.im + 0, a.re + 0);   // +0 消除 -0，避免出现 -180°
+  const cexp = (a) => {
+    const m = Math.exp(a.re);
+    return C(m * Math.cos(a.im), m * Math.sin(a.im));
+  };
+  const clog = (a) => C(Math.log(cabs(a)), carg(a));
+  const cpow = (a, b) => {
+    if (b.im === 0 && Number.isInteger(b.re) && Math.abs(b.re) <= 64) {
+      let acc = ONE;
+      for (let i = 0; i < Math.abs(b.re); i++) acc = mul(acc, a);
+      return b.re < 0 ? div(ONE, acc) : acc;
+    }
+    if (cabs(a) === 0) return ZERO;
+    return cexp(mul(b, clog(a)));
+  };
+  const csqrt = (a) => cpow(a, C(0.5, 0));
+  const csin = (a) => div(sub(cexp(mul(IM1, a)), cexp(neg(mul(IM1, a)))), C(0, 2));
+  const ccos = (a) => div(add(cexp(mul(IM1, a)), cexp(neg(mul(IM1, a)))), C(2, 0));
+  const ctan = (a) => div(csin(a), ccos(a));
+  const polar = (m, a) => C(m * Math.cos(a), m * Math.sin(a));
+  const real = (x) => C(x, 0);
+
+  const CONSTS = {
+    i: IM1, j: IM1, I: IM1, J: IM1,
+    pi: C(PI, 0), PI: C(PI, 0),
+    tau: C(TAU, 0), e: C(Math.E, 0), E: C(Math.E, 0)
+  };
+  const FUNCS = {
+    sqrt: csqrt, exp: cexp, log: clog,
+    sin: csin, cos: ccos, tan: ctan,
+    abs: (a) => real(cabs(a)), arg: (a) => real(carg(a)), phase: (a) => real(carg(a)),
+    re: (a) => real(a.re), im: (a) => real(a.im), conj: (a) => C(a.re, -a.im),
+    polar: (m, a) => polar(m.re, a.re)
+  };
+
+  /* ----------------------------------------------------- 表达式解析器 -- */
+  function tokenize(src) {
+    const s = String(src)
+      .replace(/π/g, "pi").replace(/[×·]/g, "*").replace(/÷/g, "/")
+      .replace(/[−–]/g, "-").replace(/√/g, "sqrt");
+    const re = /(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z_0-9]*|[()+\-*/^,]/g;
+    const toks = [];
+    let last = 0, m;
+    while ((m = re.exec(s)) !== null) {
+      const gap = s.slice(last, m.index).trim();
+      if (gap) throw new Error("无法识别：" + gap);
+      toks.push(m[0]);
+      last = re.lastIndex;
+    }
+    if (s.slice(last).trim()) throw new Error("无法识别：" + s.slice(last).trim());
+    if (!toks.length) throw new Error("请输入复数");
+    return toks;
+  }
+
+  function parseComplex(src) {
+    const raw = tokenize(src);
+    const toks = [];
+    let prev = null;
+    for (const t of raw) {
+      let kind;
+      if (/^[\d.]/.test(t)) kind = "num";
+      else if (Object.prototype.hasOwnProperty.call(CONSTS, t)) kind = "const";
+      else if (Object.prototype.hasOwnProperty.call(FUNCS, t)) kind = "func";
+      else if (/^[A-Za-z_]/.test(t)) kind = "ident";
+      else if (t === "(") kind = "lparen";
+      else if (t === ")") kind = "rparen";
+      else kind = "op";
+      const prevValue = prev === "num" || prev === "const" || prev === "rparen";
+      const nextValue = kind === "num" || kind === "const" || kind === "func" ||
+                        kind === "lparen" || kind === "ident";
+      if (prevValue && nextValue) toks.push("*");     // 补上省略的乘号：3i、2(1+i)…
+      toks.push(t);
+      prev = kind;
+    }
+
+    let i = 0;
+    const peek = () => toks[i];
+    const nextTok = () => toks[i++];
+
+    function parseExpr() {
+      let v = parseTerm();
+      while (peek() === "+" || peek() === "-") {
+        const op = nextTok();
+        const r = parseTerm();
+        v = op === "+" ? add(v, r) : sub(v, r);
+      }
+      return v;
+    }
+    function parseTerm() {
+      let v = parseUnary();
+      for (;;) {
+        const t = peek();
+        if (t === "*") { nextTok(); v = mul(v, parseUnary()); }
+        else if (t === "/") { nextTok(); v = div(v, parseUnary()); }
+        else if (t === "(") { v = mul(v, parseUnary()); }
+        else break;
+      }
+      return v;
+    }
+    function parseUnary() {
+      const t = peek();
+      if (t === "-") { nextTok(); return neg(parseUnary()); }
+      if (t === "+") { nextTok(); return parseUnary(); }
+      return parsePower();
+    }
+    function parsePower() {
+      const base = parseAtom();
+      if (peek() === "^") { nextTok(); return cpow(base, parseUnary()); }
+      return base;
+    }
+    function parseAtom() {
+      const t = nextTok();
+      if (t === undefined) throw new Error("表达式不完整");
+      if (/^[\d.]/.test(t)) return C(parseFloat(t), 0);
+      if (t === "(") {
+        const v = parseExpr();
+        if (peek() !== ")") throw new Error("括号不匹配");
+        nextTok();
+        return v;
+      }
+      if (Object.prototype.hasOwnProperty.call(FUNCS, t)) {
+        if (peek() !== "(") throw new Error("函数 " + t + " 需要括号");
+        nextTok();
+        const args = [];
+        if (peek() !== ")") {
+          args.push(parseExpr());
+          while (peek() === ",") { nextTok(); args.push(parseExpr()); }
+        }
+        if (peek() !== ")") throw new Error("括号不匹配");
+        nextTok();
+        return FUNCS[t].apply(null, args);
+      }
+      if (Object.prototype.hasOwnProperty.call(CONSTS, t)) return CONSTS[t];
+      throw new Error("未知符号：" + t);
+    }
+
+    const value = parseExpr();
+    if (i < toks.length) throw new Error("表达式有误");
+    return value;
+  }
+
+  /* --------------------------------------------------------- 格式化 -- */
+  function fmtNum(x, d) {
+    if (!isFinite(x)) return "∞";
+    if (Math.abs(x) < Math.pow(10, -(d + 2))) x = 0;
+    if (x !== 0 && (Math.abs(x) >= 1e5 || Math.abs(x) < 1e-4)) return x.toExponential(d);
+    return x.toFixed(d);
+  }
+  function fmtC(v, d) {
+    const tol = Math.pow(10, -(d + 2));
+    let re = Math.abs(v.re) < tol ? 0 : v.re;
+    let im = Math.abs(v.im) < tol ? 0 : v.im;
+    if (im === 0) return fmtNum(re, d);
+    const body = fmtNum(Math.abs(im), d) + "i";
+    if (re === 0) return (im < 0 ? "-" : "") + body;
+    return fmtNum(re, d) + (im < 0 ? " - " : " + ") + body;
+  }
+  function fmtAngle(rad) {
+    let deg = rad * 180 / PI;
+    return deg.toFixed(2) + "°";
+  }
+  function niceStep(raw) {
+    if (!(raw > 0) || !isFinite(raw)) return 1;
+    const exp = Math.floor(Math.log10(raw));
+    const base = raw / Math.pow(10, exp);
+    const mult = [1, 2, 2.5, 5, 10].find((m) => base <= m + 1e-12) || 10;
+    return mult * Math.pow(10, exp);
+  }
+  function fmtTick(v, step) {
+    if (Math.abs(v) < step * 1e-6) return "0";
+    const dec = Math.max(0, Math.min(3, -Math.floor(Math.log10(step))));
+    return v.toFixed(dec);
+  }
+
+  /* ------------------------------------------------------- SVG 小工具 -- */
+  function mk(tag, attrs, styles) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (styles) for (const k in styles) e.style[k] = styles[k];
+    return e;
+  }
+  function mkText(x, y, text, size, styleName, anchor) {
+    const t = mk("text", {
+      x: x.toFixed(2), y: y.toFixed(2), "font-size": size,
+      "text-anchor": anchor || "middle", "dominant-baseline": "middle"
+    }, { fill: styleName || "currentColor" });
+    t.textContent = text;
+    return t;
+  }
+  function arcPath(cx, cy, r, a0, a1) {
+    let d = a1 - a0;
+    if (Math.abs(d) < 1e-4) return "";
+    if (Math.abs(d) > TAU) d = TAU * Math.sign(d);
+    const x0 = cx + r * Math.cos(a0), y0 = cy - r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a0 + d), y1 = cy - r * Math.sin(a0 + d);
+    const large = Math.abs(d) > PI ? 1 : 0;
+    const sweep = d > 0 ? 0 : 1;
+    return "M " + x0.toFixed(2) + " " + y0.toFixed(2) + " A " + r.toFixed(2) + " " + r.toFixed(2) +
+           " 0 " + large + " " + sweep + " " + x1.toFixed(2) + " " + y1.toFixed(2);
+  }
+  function circlePath(cx, cy, r) {
+    return "M " + (cx - r) + " " + cy + " a " + r + " " + r + " 0 1 0 " + (2 * r) + " 0 a " +
+           r + " " + r + " 0 1 0 " + (-2 * r) + " 0";
+  }
+
+  /* --------------------------------------------------------- 坐标系 -- */
+  const PANEL = { cxL: 178, cxR: 562, cy: 190, rad: 140, pad: 30 };
+  function toPx(cx, cy, scale, x, y) { return [cx + x * scale, cy - y * scale]; }
+
+  function drawPanelBase(layer, cx, cy, extent, scale) {
+    const step = niceStep(extent / 2.5);
+    const kMax = Math.floor(extent / step);
+    for (let k = -kMax; k <= kMax; k++) {
+      const v = k * step;
+      if (Math.abs(v) > extent) continue;
+      if (Math.abs(v) > step * 1e-6) {
+        const px = toPx(cx, cy, scale, v, 0)[0];
+        const py = toPx(cx, cy, scale, 0, v)[1];
+        layer.appendChild(mk("line", { x1: px, y1: cy - extent * scale, x2: px, y2: cy + extent * scale },
+          { stroke: "var(--border)", strokeWidth: 1, opacity: 0.55 }));
+        layer.appendChild(mk("line", { x1: cx - extent * scale, y1: py, x2: cx + extent * scale, y2: py },
+          { stroke: "var(--border)", strokeWidth: 1, opacity: 0.55 }));
+        layer.appendChild(mkText(px, cy + 12, fmtTick(v, step), 10, "var(--muted-foreground)"));
+        layer.appendChild(mkText(cx - 7, py, fmtTick(v, step), 10, "var(--muted-foreground)", "end"));
+      }
+    }
+    layer.appendChild(mk("line", {
+      x1: cx - extent * scale - 8, y1: cy, x2: cx + extent * scale + 10, y2: cy
+    }, { stroke: "var(--border)", strokeWidth: 1.4 }));
+    layer.appendChild(mk("line", {
+      x1: cx, y1: cy + extent * scale + 8, x2: cx, y2: cy - extent * scale - 10
+    }, { stroke: "var(--border)", strokeWidth: 1.4 }));
+    layer.appendChild(mkText(cx + extent * scale + 10, cy - 10, "Re", 11, "var(--muted-foreground)", "end"));
+    layer.appendChild(mkText(cx + 12, cy - extent * scale - 10, "Im", 11, "var(--muted-foreground)", "start"));
+  }
+
+  /* ---------------------------------------------------------- 状态 -- */
+  const state = {
+    z: C(3, 4), n: 5, s: 0, playing: true, last: null, raf: 0,
+    roots: [], r: 0, theta: 0, R: 1,
+    liveNodes: {}, rootNodes: [], lastStatus: ""
+  };
+
+  function recompute() {
+    let z;
+    try {
+      z = parseComplex(inputZ.value);
+      if (!isFinite(z.re) || !isFinite(z.im)) throw new Error("数值无效");
+    } catch (err) {
+      statusEl.className = "text-small text-destructive";
+      statusEl.textContent = "z 输入有误：" + err.message;
+      return;
+    }
+    let n = Math.round(Number(inputN.value));
+    if (!isFinite(n)) n = 1;
+    n = Math.max(1, Math.min(20, n));
+    inputN.value = String(n);
+
+    state.z = z;
+    state.n = n;
+    state.s = state.s % n;
+    state.r = cabs(z);
+    state.theta = carg(z);
+    state.R = state.r === 0 ? 0 : Math.pow(state.r, 1 / n);
+    state.roots = [];
+    for (let k = 0; k < n; k++) {
+      state.roots.push(polar(state.R, (state.theta + TAU * k) / n));
+    }
+    statusEl.className = "text-small text-muted";
+    state.lastStatus = "";
+    draw();
+  }
+
+  function draw() {
+    const n = state.n, z = state.z, r = state.r, th = state.theta, R = state.R;
+
+    /* ---- 网格层 ---- */
+    while (layerGrid.firstChild) layerGrid.removeChild(layerGrid.firstChild);
+    const extL = Math.max(r * 1.2, 1e-6);
+    const extR = Math.max(R * 1.2, 1e-6);
+    const scaleL = PANEL.rad / extL, scaleR = PANEL.rad / extR;
+    drawPanelBase(layerGrid, PANEL.cxL, PANEL.cy, extL, scaleL);
+    drawPanelBase(layerGrid, PANEL.cxR, PANEL.cy, extR, scaleR);
+
+    /* ---- 静态层 ---- */
+    while (layerStatic.firstChild) layerStatic.removeChild(layerStatic.firstChild);
+    const S = layerStatic;
+    S.appendChild(mkText(PANEL.cxL, 20, "原复数 z", 12, "var(--muted-foreground)"));
+    S.appendChild(mkText(PANEL.cxR, 20, n + " 个 " + n + " 次方根", 12, "var(--muted-foreground)"));
+
+    // 左图：z 与它的辐角
+    if (r > 0) {
+      S.appendChild(mk("circle", { cx: PANEL.cxL, cy: PANEL.cy, r: r * scaleL },
+        { fill: "none", stroke: "var(--viz-series-2)", strokeWidth: 1, opacity: 0.4,
+          strokeDasharray: "4 5" }));
+      const p = toPx(PANEL.cxL, PANEL.cy, scaleL, z.re, z.im);
+      S.appendChild(mk("line", { x1: PANEL.cxL, y1: PANEL.cy, x2: p[0], y2: p[1] },
+        { stroke: "var(--viz-series-2)", strokeWidth: 2.5 }));
+      S.appendChild(mk("circle", { cx: p[0], cy: p[1], r: 5 },
+        { fill: "var(--viz-series-2)" }));
+      S.appendChild(mkText(p[0] + (z.re >= 0 ? 10 : -10), p[1] - 12, "z", 12,
+        "var(--viz-series-2)", z.re >= 0 ? "start" : "end"));
+      if (Math.abs(th) > 1e-6) {
+        S.appendChild(mk("path", { d: arcPath(PANEL.cxL, PANEL.cy, Math.min(0.34 * r * scaleL, 42), 0, th) },
+          { fill: "none", stroke: "var(--viz-series-2)", strokeWidth: 1.6, opacity: 0.8 }));
+        const am = th / 2, ar = Math.min(0.34 * r * scaleL, 42) + 15;
+        S.appendChild(mkText(PANEL.cxL + ar * Math.cos(am), PANEL.cy - ar * Math.sin(am),
+          "θ = " + fmtAngle(th), 11, "var(--viz-series-2)"));
+      }
+      S.appendChild(mkText(PANEL.cxL, 366, "辐角 θ + 2πs：同一个 z 反复出现", 11,
+        "var(--muted-foreground)"));
+    }
+
+    // 右图：圆、正 n 边形、n 个根
+    if (R > 0) {
+      S.appendChild(mk("path", { d: circlePath(PANEL.cxR, PANEL.cy, R * scaleR) },
+        { fill: "none", stroke: "var(--viz-series-1)", strokeWidth: 1.5, opacity: 0.55 }));
+    }
+    const angs = state.roots.map((w) => Math.atan2(w.im, w.re));
+    const tips = state.roots.map((w) => toPx(PANEL.cxR, PANEL.cy, scaleR, w.re, w.im));
+    if (n >= 2 && R > 0) {
+      const rArc = Math.min(0.42 * R * scaleR, 44);
+      for (let k = 0; k < n; k++) {
+        S.appendChild(mk("path", { d: arcPath(PANEL.cxR, PANEL.cy, rArc, angs[k], angs[k] + TAU / n) },
+          { fill: "none", stroke: "var(--muted-foreground)", strokeWidth: 1, opacity: 0.5 }));
+      }
+      S.appendChild(mkText(PANEL.cxR + (rArc + 16) * Math.cos(angs[0] + PI / n),
+        PANEL.cy - (rArc + 16) * Math.sin(angs[0] + PI / n), "2π/n", 11, "var(--muted-foreground)"));
+    }
+    if (n >= 3 && R > 0) {
+      const pts = tips.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+      S.appendChild(mk("polygon", { points: pts },
+        { fill: "var(--viz-series-1)", fillOpacity: 0.07, stroke: "var(--muted-foreground)",
+          strokeWidth: 1.2, opacity: 0.8 }));
+    }
+    state.rootNodes = [];
+    tips.forEach((p, k) => {
+      const dot = mk("circle", { cx: p[0], cy: p[1], r: 4.5 }, { fill: "var(--viz-series-1)" });
+      S.appendChild(dot);
+      const dx = p[0] - PANEL.cxR, dy = p[1] - PANEL.cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const label = mkText(p[0] + dx / len * 17, p[1] + dy / len * 17, "w" + k, 11,
+        "var(--muted-foreground)");
+      S.appendChild(label);
+      state.rootNodes.push({ dot: dot, label: label, x: p[0], y: p[1] });
+    });
+    S.appendChild(mkText(PANEL.cxR, 366, "等角分布，相邻夹角 2π/n", 11, "var(--muted-foreground)"));
+
+    /* ---- 动态层 ---- */
+    while (layerLive.firstChild) layerLive.removeChild(layerLive.firstChild);
+    const L = layerLive;
+    state.liveNodes = {};
+    state.liveNodes.pointerL = mk("line", { x1: PANEL.cxL, y1: PANEL.cy, x2: PANEL.cxL, y2: PANEL.cy },
+      { stroke: "var(--primary)", strokeWidth: 2, opacity: 0.95 });
+    state.liveNodes.arcL = mk("path", { d: "" },
+      { fill: "none", stroke: "var(--primary)", strokeWidth: 1.6, opacity: 0.85 });
+    state.liveNodes.dotL = mk("circle", { cx: PANEL.cxL, cy: PANEL.cy, r: 4 },
+      { fill: "var(--primary)" });
+    state.liveNodes.pointerR = mk("line", { x1: PANEL.cxR, y1: PANEL.cy, x2: PANEL.cxR, y2: PANEL.cy },
+      { stroke: "var(--primary)", strokeWidth: 2 });
+    state.liveNodes.arcR = mk("path", { d: "" },
+      { fill: "none", stroke: "var(--primary)", strokeWidth: 2, opacity: 0.9 });
+    state.liveNodes.ring = mk("circle", { cx: PANEL.cxR, cy: PANEL.cy, r: 10 },
+      { fill: "none", stroke: "var(--viz-series-1)", strokeWidth: 2, opacity: 0 });
+    for (const key of ["arcL", "pointerL", "pointerR", "arcR", "ring", "dotL"]) {
+      L.appendChild(state.liveNodes[key]);
+    }
+
+    svgDesc.textContent = "复数 z 的 " + n + " 个 " + n + " 次方根：模长均为 |z| 的 " + n +
+      " 次方根，" + n + " 个根均匀分布在圆上，相邻夹角 " + fmtAngle(TAU / n) + "。";
+
+    /* ---- 文字结果 ---- */
+    while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+    state.roots.forEach((w, k) => {
+      const span = document.createElement("span");
+      span.textContent = "w" + k + " = " + fmtC(w, 4);
+      listEl.appendChild(span);
+    });
+
+    updateLive();
+  }
+
+  function updateLive() {
+    const n = state.n, th = state.theta, r = state.r, R = state.R;
+    const extL = Math.max(r * 1.2, 1e-6), extR = Math.max(R * 1.2, 1e-6);
+    const scaleL = PANEL.rad / extL, scaleR = PANEL.rad / extR;
+    const L = state.liveNodes;
+    if (!L.pointerL) return;
+
+    const phi = th + TAU * state.s;
+    if (r > 0) {
+      const p = toPx(PANEL.cxL, PANEL.cy, scaleL, r * Math.cos(phi), r * Math.sin(phi));
+      L.pointerL.setAttribute("x2", p[0].toFixed(2));
+      L.pointerL.setAttribute("y2", p[1].toFixed(2));
+      L.dotL.setAttribute("cx", p[0].toFixed(2));
+      L.dotL.setAttribute("cy", p[1].toFixed(2));
+      const mod = ((phi % TAU) + TAU) % TAU;
+      L.arcL.setAttribute("d", arcPath(PANEL.cxL, PANEL.cy, Math.min(0.5 * r * scaleL, 58), 0, mod));
+    }
+
+    const psi = (th + TAU * state.s) / n;
+    if (R > 0) {
+      const q = toPx(PANEL.cxR, PANEL.cy, scaleR, R * Math.cos(psi), R * Math.sin(psi));
+      L.pointerR.setAttribute("x2", q[0].toFixed(2));
+      L.pointerR.setAttribute("y2", q[1].toFixed(2));
+      const a0 = Math.atan2(state.roots[0].im, state.roots[0].re);
+      L.arcR.setAttribute("d", arcPath(PANEL.cxR, PANEL.cy, Math.min(0.68 * R * scaleR, 66), a0, psi));
+    }
+
+    const kNow = ((Math.round(state.s) % n) + n) % n;
+    const near = Math.abs(state.s - Math.round(state.s));
+    const flash = Math.max(0, 1 - near / 0.3);
+    const node = state.rootNodes[kNow];
+    if (node) {
+      L.ring.setAttribute("cx", node.x.toFixed(2));
+      L.ring.setAttribute("cy", node.y.toFixed(2));
+      L.ring.setAttribute("r", (9 + 6 * flash).toFixed(2));
+      L.ring.style.opacity = (0.25 + 0.75 * flash).toFixed(2);
+    }
+    state.rootNodes.forEach((nd, k) => {
+      const active = k === kNow;
+      nd.dot.setAttribute("r", active ? (4.5 + 2 * flash).toFixed(2) : "4.5");
+      nd.label.style.fill = active ? "var(--foreground)" : "var(--muted-foreground)";
+    });
+
+    const w = state.roots[kNow];
+    const txt = "|z| = " + fmtNum(state.r, 4) + "，arg z = " + fmtAngle(th) +
+      "，|w| = |z|^(1/n) = " + fmtNum(R, 5) + "，2π/n = " + fmtAngle(TAU / n) +
+      "，θ+2πs = " + fmtAngle(phi) + "  →  w" + kNow + " = " + fmtC(w, 4);
+    if (txt !== state.lastStatus) {
+      statusEl.className = "text-small text-muted";
+      statusEl.textContent = txt;
+      state.lastStatus = txt;
+    }
+  }
+
+  /* ---------------------------------------------------------- 动画 -- */
+  function step(ts) {
+    if (!state.playing) { state.raf = 0; return; }
+    if (state.last === null) state.last = ts;
+    const dt = Math.min(0.06, Math.max(0, (ts - state.last) / 1000));
+    state.last = ts;
+    state.s = (state.s + dt * state.n / LOOP_SECONDS) % state.n;
+    updateLive();
+    state.raf = window.requestAnimationFrame(step);
+  }
+  function play() {
+    state.playing = true;
+    state.last = null;
+    btnPlay.textContent = "暂停";
+    btnPlay.setAttribute("aria-pressed", "true");
+    if (!state.raf) state.raf = window.requestAnimationFrame(step);
+  }
+  function pause() {
+    state.playing = false;
+    state.last = null;
+    btnPlay.textContent = "播放";
+    btnPlay.setAttribute("aria-pressed", "false");
+    if (state.raf) { window.cancelAnimationFrame(state.raf); state.raf = 0; }
+  }
+
+  btnPlay.addEventListener("click", function () {
+    if (state.playing) pause(); else play();
+  });
+
+  let debounce = 0;
+  inputZ.addEventListener("input", function () {
+    window.clearTimeout(debounce);
+    debounce = window.setTimeout(recompute, 250);
+  });
+  inputN.addEventListener("input", function () {
+    window.clearTimeout(debounce);
+    debounce = window.setTimeout(recompute, 250);
+  });
+
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  recompute();
+  if (reduce) pause(); else play();
+})();
+</script>
+  <footer>
+    支持写法：<code>3+4i</code>、<code>-8</code>、<code>2i</code>、<code>sqrt(2)-sqrt(2)i</code>、
+    <code>2*exp(i*pi/3)</code>、<code>polar(2, pi/6)</code>。
+    同一套算法的 Python 桌面版见 <code>complex_roots.py</code>。
+  </footer>
+</main>
+</body>
+</html>

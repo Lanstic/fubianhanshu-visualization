@@ -1,0 +1,2 @@
+# 图形界面与动图导出需要 Pillow（tkinter 随 Python 官方安装包自带）
+pillow>=9.0
