@@ -3,7 +3,7 @@
 """把交互小程序的页面片段打包成一个可离线打开的独立网页。
 
 用法：
-    python build_web.py                      # 使用下面的默认片段路径
+    python build_web.py                      # 使用同目录的 web_fragment.html
     python build_web.py <片段.html> <输出.html>
 
 生成结果：complex_roots_web.html（双击即可用浏览器打开，不联网也能用）
@@ -15,9 +15,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUTPUT = os.path.join(HERE, "complex_roots_web.html")
 LOCAL_FRAGMENT = os.path.join(HERE, "web_fragment.html")          # 随包附带的片段副本
-ORIGIN_FRAGMENT = (r"C:\Users\Weixiangkai\.codex\visualizations"
-                   r"\2026\09\18\01a0b485-4ebe-7b33-a8f5-dc5735d6f51f\complex-roots.html")
-DEFAULT_FRAGMENT = LOCAL_FRAGMENT if os.path.exists(LOCAL_FRAGMENT) else ORIGIN_FRAGMENT
+DEFAULT_FRAGMENT = LOCAL_FRAGMENT                                 # 命令行参数可覆盖
 
 # 片段里的类名（viz-controls / form-control / btn / viz-row …）在外壳里补上样式，
 # 使同一个片段既能在对话里渲染，也能单独成为一个网页。
